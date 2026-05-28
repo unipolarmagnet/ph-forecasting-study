@@ -167,6 +167,77 @@ def get_data():
     return jsonify(payload)
 
 
+@app.get("/nodes")
+def list_nodes():
+    """List the available preprocessing nodes (for /pipeline/run 'preprocessing' field)."""
+    from preprocessing import nodes
+    return jsonify(list(nodes.NODES))
+
+
+@app.post("/pipeline/run")
+def pipeline_run():
+    """Run the full pipeline in one call: data -> preprocessing -> model train+eval.
+
+    Body JSON:
+      { "data": "AAPL",                 # ticker in data/ or a .csv path
+        "preprocessing": [              # ordered list (optional)
+          {"node":"normalize","params":{"columns":["Volume"]}},
+          {"node":"ph_features","params":{"filtration":"vietoris_rips","vectorizer":"silhouette",
+                                          "window":96,"stride":5,"dimension":3,"delay":4,
+                                          "homology_dim":1,"maxdim":1,"resolution":20}}
+        ],
+        "model": "dlinear",             # any name from /models
+        "model_params": {               # model + training hyper-parameters (optional)
+          "seq_len":96,"pred_len":24,"epochs":10,"batch_size":32,"lr":0.005,
+          "features":"MS","target":"Close","mix_channels":true,"seed":2021
+        } }
+    Returns: metrics (mse/mae/da/r2) + n_ph_features + preprocess/train/total seconds.
+    """
+    from preprocessing import nodes
+    body = request.get_json(force=True, silent=True) or {}
+    if not body.get("data"):
+        return jsonify(error="missing required field 'data'"), 400
+    name = body.get("model", "dlinear")
+    if name not in MODELS:
+        return jsonify(error=f"unknown model '{name}'", available=list(MODELS)), 404
+    steps_spec = body.get("preprocessing", []) or []
+    for s in steps_spec:
+        if not isinstance(s, dict) or "node" not in s:
+            return jsonify(error="each preprocessing step must be {'node':..., 'params':{}}"), 400
+        if s["node"] not in nodes.NODES:
+            return jsonify(error=f"unknown node '{s['node']}'", available=list(nodes.NODES)), 400
+    steps = [(s["node"], dict(s.get("params") or {})) for s in steps_spec]
+    mp = body.get("model_params", {}) or {}
+
+    try:
+        t0 = time.time()
+        df, stem = _resolve_data(body["data"])
+        prep_s, n_ph, ph_warn = 0.0, 0, None
+        if steps:
+            tp = time.time()
+            df = apply_pipeline(df, steps, target=mp.get("target", "Close"))
+            prep_s = round(time.time() - tp, 3)
+            ph_cols = [c for c in df.columns if c.startswith("ph_")]
+            n_ph = len(ph_cols)
+            if n_ph and float(np.nanstd(df[ph_cols].to_numpy(dtype=float))) < 1e-9:
+                ph_warn = ("PH features are all-constant/zero (degenerate config). "
+                           "Verify the parameters (e.g. window too small for the embedding).")
+        build = _load_build(MODELS[name]["build"])
+        cfg = _cfg(mp, MODELS[name])
+        m = _common.run_cfg(build, name, cfg, df=df)
+        m.pop("preds", None)
+        m.update(dataset=stem, model=name,
+                 preprocessing_steps=[s["node"] for s in steps_spec],
+                 n_ph_features=n_ph,
+                 preprocess_seconds=prep_s, train_seconds=m.get("elapsed_s"),
+                 total_seconds=round(time.time() - t0, 3))
+        if ph_warn:
+            m["ph_warning"] = ph_warn
+        return jsonify(m)
+    except Exception as e:
+        return jsonify(error=f"{type(e).__name__}: {str(e)[:300]}"), 500
+
+
 @app.post("/model/<name>")
 def run_model(name):
     if name not in MODELS:
