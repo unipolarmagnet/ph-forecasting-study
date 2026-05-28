@@ -30,7 +30,9 @@ import _common                                   # noqa: E402  (models/_common.p
 from preprocessing import apply as apply_pipeline  # noqa: E402
 from study import genome as G                    # noqa: E402
 
-PENALTY = 10.0
+PENALTY_Z = 10.0       # divergence threshold in z-space (MSE in scaled units)
+PENALTY = 1.0e6        # fallback marker for degenerate cases (well above any realistic
+                       # $^2 MSE for any of the stock datasets we use)
 METRICS = ["mse", "mae", "da", "r2"]
 
 # model registry: per-model build factory + sensible defaults (lr / epochs / channel-mix).
@@ -144,17 +146,25 @@ def _evaluate_steps(sc, steps):
         # e.g. an empty diagram), do NOT reward the model's free extra-channel capacity.
         ph_cols = [c for c in df.columns if c.startswith("ph_")]
         if ph_cols and float(np.nanstd(df[ph_cols].to_numpy(dtype=float))) < 1e-9:
-            per[d.stem] = dict(mse=PENALTY, mae=PENALTY, da=float("nan"), r2=float("nan"),
-                               seconds=0.0,
-                               mse_per_seed=[PENALTY] * len(sc.seeds), mse_std=0.0)
+            # penalty in original (price) units — use the target column's std as the scale
+            tstd = float(df[sc.target].std()) if sc.target in df.columns else 1.0
+            pen_orig = PENALTY_Z * tstd * tstd
+            per[d.stem] = dict(mse=pen_orig, mae=PENALTY_Z * tstd,
+                               da=float("nan"), r2=float("nan"), seconds=0.0,
+                               mse_per_seed=[pen_orig] * len(sc.seeds), mse_std=0.0)
             continue
         seed_mse, seed_mae, seed_da, seed_r2, seed_s = [], [], [], [], []
         for seed in sc.seeds:
             cfg = _model_cfg(sc, seed)
             m = _common.run_cfg(sc.build_fn, sc.model, cfg, df=df)
-            mse = m["mse"]
-            if not np.isfinite(mse) or mse > PENALTY:        # bound degenerate/diverged
-                m = dict(mse=PENALTY, mae=PENALTY, r2=float("nan"), da=float("nan"),
+            # divergence check on scaled-space MSE (where PENALTY_Z=10 is meaningfully
+            # bad regardless of dataset scale). Penalty value is reported back in
+            # original (price) units via target_std so it stays comparable.
+            mse_z = m.get("mse_z", m["mse"]); tstd = m.get("target_std", 1.0)
+            if not np.isfinite(m["mse"]) or mse_z > PENALTY_Z:
+                pen_orig = PENALTY_Z * tstd * tstd
+                m = dict(mse=pen_orig, mae=PENALTY_Z * tstd,
+                         r2=float("nan"), da=float("nan"),
                          elapsed_s=m.get("elapsed_s", 0))
             seed_mse.append(float(m["mse"])); seed_mae.append(float(m["mae"]))
             seed_da.append(float(m["da"]));   seed_r2.append(float(m["r2"]))

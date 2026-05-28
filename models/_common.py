@@ -7,7 +7,9 @@ CLI `run(build_fn, model_name, defaults)`. Models stay tiny — they only supply
 Forecasting setup (matches the LTSF/TSLib convention we verified):
   * sliding window of `seq_len` past steps -> predict next `pred_len` steps
   * StandardScaler fit on the TRAIN split only, applied to all splits
-  * MSE/MAE reported in scaled space (standard for these benchmarks)
+  * MSE/MAE reported in ORIGINAL (inverse-transformed) units — i.e. dollars for
+    stock prices. Scaled-space values are also returned as `mse_z`/`mae_z`.
+    R^2 and directional accuracy are scale-invariant so they're identical either way.
   * features:  S  = univariate target only
                MS = all feature columns in, predict the target column only
                M  = all columns in and out
@@ -238,14 +240,22 @@ def run_cfg(build_fn, model_name, cfg, df=None):
         model.load_state_dict(best_state)
 
     ev = evaluate(model, test_loader, device, cfg)
-    mse, mae, r2, da, preds = ev["mse"], ev["mae"], ev["r2"], ev["da"], ev["preds"]
+    mse_z, mae_z, r2, da, preds = ev["mse"], ev["mae"], ev["r2"], ev["da"], ev["preds"]
+    # Inverse-transform back to original (price) units: scaled = (x - mean)/std,
+    # so (p*s + m) - (t*s + m) = s*(p - t). The additive shift cancels in the diff,
+    # so MSE_orig = s^2 * MSE_z and MAE_orig = s * MAE_z. r2/da are scale-invariant.
+    target_std = float(stats["std"][target_idx]) if not cfg.no_scale else 1.0
+    mse = mse_z * target_std * target_std
+    mae = mae_z * target_std
     elapsed = round(time.time() - t0, 1)
     metrics = dict(model=model_name, data=str(getattr(cfg, "data_path", "<df>")), features=cfg.features,
                    seq_len=cfg.seq_len, pred_len=cfg.pred_len, n_features=n_feat,
-                   target=stats["target"], mse=mse, mae=mae, r2=r2, da=da, val_mse=best_val,
-                   elapsed_s=elapsed, epochs_ran=ep + 1, seed=cfg.seed)
+                   target=stats["target"], mse=mse, mae=mae, r2=r2, da=da,
+                   mse_z=mse_z, mae_z=mae_z, target_std=target_std,
+                   val_mse=best_val, elapsed_s=elapsed, epochs_ran=ep + 1, seed=cfg.seed)
     if not cfg.quiet:
-        print(f"{model_name}  MSE {mse:.4f}  MAE {mae:.4f}  R2 {r2:.4f}  DA {da:.3f}  ({elapsed}s, {ep+1} epochs)")
+        print(f"{model_name}  MSE {mse:.4f} ({mse_z:.4f} z)  MAE {mae:.4f}  R2 {r2:.4f}  "
+              f"DA {da:.3f}  ({elapsed}s, {ep+1} epochs)")
 
     if cfg.out_dir:
         out = Path(cfg.out_dir)

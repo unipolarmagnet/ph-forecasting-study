@@ -157,8 +157,10 @@ if __name__ == "__main__":
     p.add_argument("--pred_len", type=int, default=5)
     p.add_argument("--seed", type=int, default=2021,
                    help="seed for EA randomness (population init, crossover, mutation)")
-    p.add_argument("--seeds", type=int, nargs="+", default=[2021, 2022, 2023],
-                   help="seeds trained PER individual; fitness = mean MSE over these")
+    p.add_argument("--seeds", type=int, nargs="+",
+                   default=list(range(2021, 2041)),     # 20 seeds — robust against luck
+                   help="seeds trained PER individual; fitness = mean MSE over these "
+                        "(default 20 seeds: 2021..2040). NOTE: cost grows linearly in this list.")
     p.add_argument("--out_dir", default=None)
     a = p.parse_args()
     ds = [str(DATA / f"{t}.csv") if not str(t).endswith(".csv") else t for t in a.datasets]
