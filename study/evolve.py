@@ -59,21 +59,24 @@ def _stats(pop):
 
 
 def run(datasets, model="dlinear", pop_size=24, ngen=12, cxpb=0.6, mutpb=0.3, seed=2021,
-        epochs=10, seq_len=64, pred_len=5, out_dir=None):
+        seeds=None, epochs=10, seq_len=64, pred_len=5, out_dir=None):
     random.seed(seed); np.random.seed(seed)
+    seeds = list(seeds) if seeds else [seed]
     out = Path(out_dir or (ROOT / "study" / "runs" / f"{model}_{time.strftime('%Y%m%d_%H%M%S')}"))
     out.mkdir(parents=True, exist_ok=True)
     log = _logger(out)
 
     sc = StudyConfig(datasets=datasets, model=model, epochs=epochs, seq_len=seq_len,
-                     pred_len=pred_len, seed=seed,
+                     pred_len=pred_len, seeds=seeds,
                      log_path=out / "evals.jsonl", results_path=out / "results.csv")
     (out / "config.json").write_text(json.dumps(dict(
         datasets=[Path(d).stem for d in datasets], model=model, pop_size=pop_size, ngen=ngen,
-        cxpb=cxpb, mutpb=mutpb, seed=seed, epochs=epochs, seq_len=seq_len, pred_len=pred_len,
+        cxpb=cxpb, mutpb=mutpb, ea_seed=seed, fitness_seeds=seeds,
+        epochs=epochs, seq_len=seq_len, pred_len=pred_len,
         lr=sc.lr, genes=G.NAMES), indent=2))
     log.info(f"START model={model} pop={pop_size} ngen={ngen} datasets={len(datasets)} "
-             f"epochs={epochs} seq_len={seq_len} pred_len={pred_len} seed={seed} device={sc.device}")
+             f"epochs={epochs} seq_len={seq_len} pred_len={pred_len} "
+             f"fitness_seeds={seeds} (n={len(seeds)}) ea_seed={seed} device={sc.device}")
 
     tb = make_toolbox(sc)
     hof = tools.HallOfFame(10)
@@ -152,9 +155,12 @@ if __name__ == "__main__":
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--seq_len", type=int, default=64)
     p.add_argument("--pred_len", type=int, default=5)
-    p.add_argument("--seed", type=int, default=2021)
+    p.add_argument("--seed", type=int, default=2021,
+                   help="seed for EA randomness (population init, crossover, mutation)")
+    p.add_argument("--seeds", type=int, nargs="+", default=[2021, 2022, 2023],
+                   help="seeds trained PER individual; fitness = mean MSE over these")
     p.add_argument("--out_dir", default=None)
     a = p.parse_args()
     ds = [str(DATA / f"{t}.csv") if not str(t).endswith(".csv") else t for t in a.datasets]
     run(ds, model=a.model, pop_size=a.pop, ngen=a.ngen, epochs=a.epochs, seq_len=a.seq_len,
-        pred_len=a.pred_len, seed=a.seed, out_dir=a.out_dir)
+        pred_len=a.pred_len, seed=a.seed, seeds=a.seeds, out_dir=a.out_dir)

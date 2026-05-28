@@ -1,11 +1,16 @@
 """Fitness for the PH evolutionary study.
 
-fitness(individual) = mean test-MSE of DLinear (channel-mixing) trained on each of
-the 12 stock datasets after applying the genome's PH preprocessing. Lower is better.
+fitness(individual) = mean test-MSE across (dataset x seed) trainings of the chosen
+model after applying the genome's PH preprocessing. Lower is better.
 
-For every individual we also record MAE, DA (directional accuracy), R2 and wall-clock
-time (per dataset + averaged), appended to a results table. Deterministic seed ->
-identical genomes are cached (not retrained).
+By default each individual is trained with MULTIPLE seeds per dataset (configurable
+via `StudyConfig.seeds`) and the MSEs are averaged — this kills the seed-luck
+overfit where a single-seed best score doesn't reproduce on different seeds.
+Per-eval between-seed std (`mse_std`) is logged so you can see how robust each
+fitness actually is.
+
+PH features are seed-independent, so they are cached per (dataset, genome) — only
+the model training multiplies with seed count.
 """
 import hashlib
 import json
@@ -45,8 +50,8 @@ def _load_build(spec):
 
 class StudyConfig:
     def __init__(self, datasets, model="dlinear", seq_len=64, pred_len=5, target="Close",
-                 epochs=None, batch_size=32, lr=None, patience=4, seed=2021, device=None,
-                 log_path=None, results_path=None):
+                 epochs=None, batch_size=32, lr=None, patience=4, seed=2021, seeds=None,
+                 device=None, log_path=None, results_path=None):
         if model not in MODELS:
             raise ValueError(f"model {model!r}; choose from {list(MODELS)}")
         reg = MODELS[model]
@@ -58,7 +63,10 @@ class StudyConfig:
         self.epochs = int(epochs if epochs is not None else reg["epochs"])
         self.batch_size, self.patience = batch_size, patience
         self.lr = float(lr if lr is not None else reg["lr"])
-        self.seed = seed
+        # `seeds` is the list trained PER individual; `seed` stays for back-compat (== seeds[0]).
+        # Default to a single seed so existing call sites keep their cost; the EA CLI sets 3.
+        self.seeds = [int(s) for s in (seeds if seeds else [seed])]
+        self.seed = self.seeds[0]
         import torch
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.log_path = Path(log_path) if log_path else None        # full per-eval JSONL
@@ -69,12 +77,12 @@ class StudyConfig:
         self.current_gen = 0          # set by the EA so each results row knows its generation
 
 
-def _model_cfg(sc):
+def _model_cfg(sc, seed):
     return types.SimpleNamespace(
         seq_len=sc.seq_len, pred_len=sc.pred_len, features="MS", target=sc.target,
         epochs=sc.epochs, batch_size=sc.batch_size, lr=sc.lr, patience=sc.patience,
         train_ratio=0.7, test_ratio=0.2, no_scale=False, individual=False,
-        mix_channels=sc.mix_channels, kernel_size=25, clip_grad=4.0, seed=sc.seed,
+        mix_channels=sc.mix_channels, kernel_size=25, clip_grad=4.0, seed=int(seed),
         device=sc.device, out_dir=None, quiet=True)
 
 
@@ -101,7 +109,8 @@ def _write_results_row(sc, rec):
                vectorizer=g["vectorizer"], homology_dim=g["homology_dim"],
                ph_source=g["ph_source"], window=g["window"], dimension=g["dimension"],
                delay=g["delay"], maxdim=g["maxdim"], metric=g["metric"], resolution=g["resolution"],
-               mse=rec["mse"], mae=rec["mae"], da=rec["da"], r2=rec["r2"], seconds=rec["seconds"])
+               mse=rec["mse"], mse_std=rec.get("mse_std", 0.0),
+               mae=rec["mae"], da=rec["da"], r2=rec["r2"], seconds=rec["seconds"])
     header = list(row)
     new = not sc.results_path.exists()
     with open(sc.results_path, "a", newline="") as f:
@@ -110,9 +119,23 @@ def _write_results_row(sc, rec):
         f.write(",".join(f"{row[k]:.6f}" if isinstance(row[k], float) else str(row[k]) for k in header) + "\n")
 
 
+def _safe_mean(xs):                                           # no RuntimeWarning on all-NaN
+    a = np.asarray(xs, dtype=float)
+    return float("nan") if a.size == 0 or np.all(np.isnan(a)) else float(np.nanmean(a))
+
+
+def _safe_std(xs):
+    a = np.asarray(xs, dtype=float)
+    return float("nan") if a.size == 0 or np.all(np.isnan(a)) else float(np.nanstd(a))
+
+
 def _evaluate_steps(sc, steps):
-    """Train DLinear on each dataset with `steps`; return averaged metrics + per-dataset."""
-    cfg = _model_cfg(sc)
+    """Train the model on every (dataset x seed) pair; aggregate by mean.
+
+    Returns (agg, per) where `agg` has mean MSE/MAE/DA/R2 (over all trainings)
+    plus `mse_std` (std of MSE across seeds, averaged across datasets — i.e. how
+    seed-sensitive this genome's MSE is). `per` is per-dataset with per-seed lists.
+    """
     per = {}
     t0 = time.time()
     for d in sc.datasets:
@@ -121,19 +144,30 @@ def _evaluate_steps(sc, steps):
         # e.g. an empty diagram), do NOT reward the model's free extra-channel capacity.
         ph_cols = [c for c in df.columns if c.startswith("ph_")]
         if ph_cols and float(np.nanstd(df[ph_cols].to_numpy(dtype=float))) < 1e-9:
-            per[d.stem] = dict(mse=PENALTY, mae=PENALTY, da=float("nan"), r2=float("nan"), seconds=0.0)
+            per[d.stem] = dict(mse=PENALTY, mae=PENALTY, da=float("nan"), r2=float("nan"),
+                               seconds=0.0,
+                               mse_per_seed=[PENALTY] * len(sc.seeds), mse_std=0.0)
             continue
-        m = _common.run_cfg(sc.build_fn, sc.model, cfg, df=df)
-        mse = m["mse"]
-        if not np.isfinite(mse) or mse > PENALTY:    # bound degenerate/diverged configs
-            m = dict(mse=PENALTY, mae=PENALTY, r2=float("nan"), da=float("nan"), elapsed_s=m.get("elapsed_s", 0))
-        per[d.stem] = dict(mse=float(m["mse"]), mae=float(m["mae"]),
-                           da=float(m["da"]), r2=float(m["r2"]), seconds=float(m["elapsed_s"]))
+        seed_mse, seed_mae, seed_da, seed_r2, seed_s = [], [], [], [], []
+        for seed in sc.seeds:
+            cfg = _model_cfg(sc, seed)
+            m = _common.run_cfg(sc.build_fn, sc.model, cfg, df=df)
+            mse = m["mse"]
+            if not np.isfinite(mse) or mse > PENALTY:        # bound degenerate/diverged
+                m = dict(mse=PENALTY, mae=PENALTY, r2=float("nan"), da=float("nan"),
+                         elapsed_s=m.get("elapsed_s", 0))
+            seed_mse.append(float(m["mse"])); seed_mae.append(float(m["mae"]))
+            seed_da.append(float(m["da"]));   seed_r2.append(float(m["r2"]))
+            seed_s.append(float(m["elapsed_s"]))
+        per[d.stem] = dict(
+            mse=_safe_mean(seed_mse), mae=_safe_mean(seed_mae),
+            da=_safe_mean(seed_da),   r2=_safe_mean(seed_r2),
+            seconds=float(sum(seed_s)),
+            mse_per_seed=seed_mse, mse_std=_safe_std(seed_mse))
 
-    def _mean(xs):                                          # no RuntimeWarning on all-NaN
-        a = np.asarray(xs, dtype=float)
-        return float("nan") if a.size == 0 or np.all(np.isnan(a)) else float(np.nanmean(a))
-    agg = {k: _mean([per[ds][k] for ds in per]) for k in METRICS}
+    agg = {k: _safe_mean([per[ds][k] for ds in per]) for k in METRICS}
+    # how seed-sensitive is this genome — mean of per-dataset between-seed std
+    agg["mse_std"] = _safe_mean([per[ds]["mse_std"] for ds in per])
     agg["seconds"] = round(time.time() - t0, 2)
     return agg, per
 
@@ -146,7 +180,8 @@ def evaluate(individual, sc: StudyConfig):
     try:
         agg, per = _evaluate_steps(sc, steps)
     except Exception as e:
-        agg = dict(mse=PENALTY, mae=PENALTY, da=float("nan"), r2=float("nan"), seconds=0.0)
+        agg = dict(mse=PENALTY, mae=PENALTY, da=float("nan"), r2=float("nan"),
+                   mse_std=0.0, seconds=0.0)
         per = {"error": str(e)[:200]}
     sc.n_evals += 1
     rec = dict(eval=sc.n_evals, genome=G.to_dict(individual), signature=sig, steps=steps,
