@@ -124,6 +124,7 @@ margin:4px 0 0;font-size:12px;white-space:pre-wrap;word-break:break-word}
       <div><label>seq_len</label><input id="pr_seq" type="number" value="96"></div>
       <div><label>pred_len</label><input id="pr_pred" type="number" value="24"></div>
       <div><label>epochs</label><input id="pr_epochs" type="number" value="10"></div>
+      <div><label>patience</label><input id="pr_pat" type="number" value="5" title="early-stop after N bad-val epochs; set high (e.g. 9999) to disable"></div>
       <div><label>batch_size</label><input id="pr_bs" type="number" value="32"></div>
       <div><label>lr</label><input id="pr_lr" type="number" step="0.0001" value="0.005"></div>
       <div><label>features</label><select id="pr_feat"><option>MS</option><option>S</option><option>M</option></select></div>
@@ -235,8 +236,9 @@ function sendPipeline(){
     data: val('pr_data'), model: val('pr_model'), preprocessing: steps,
     model_params: {
       seq_len:num('pr_seq'), pred_len:num('pr_pred'), epochs:num('pr_epochs'),
-      batch_size:num('pr_bs'), lr:num('pr_lr'), features:val('pr_feat'),
-      target:val('pr_target'), seed:num('pr_seed'), mix_channels:val('pr_mix')
+      patience:num('pr_pat'), batch_size:num('pr_bs'), lr:num('pr_lr'),
+      features:val('pr_feat'), target:val('pr_target'),
+      seed:num('pr_seed'), mix_channels:val('pr_mix')
     }
   };
   send('POST','/pipeline/run',{body},'r_pipeline');
