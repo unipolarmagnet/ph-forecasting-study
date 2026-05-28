@@ -244,9 +244,22 @@ def run_cfg(build_fn, model_name, cfg, df=None):
     # Inverse-transform back to original (price) units: scaled = (x - mean)/std,
     # so (p*s + m) - (t*s + m) = s*(p - t). The additive shift cancels in the diff,
     # so MSE_orig = s^2 * MSE_z and MAE_orig = s * MAE_z. r2/da are scale-invariant.
-    target_std = float(stats["std"][target_idx]) if not cfg.no_scale else 1.0
-    mse = mse_z * target_std * target_std
-    mae = mae_z * target_std
+    #
+    # IMPORTANT: this inverse only works when MSE was computed on a SINGLE channel
+    # (S = target only, MS = sliced to target). For features="M" the model predicts
+    # ALL channels and MSE/MAE are averaged across channels of differing scales —
+    # scaling that average by `target_std^2` would be meaningless. In M mode we
+    # report metrics in z-space and set target_std=NaN to flag the situation.
+    if cfg.no_scale:
+        target_std = 1.0
+        mse, mae = mse_z, mae_z
+    elif cfg.features == "M":
+        target_std = float("nan")     # not a single-channel inverse
+        mse, mae = mse_z, mae_z       # leave in z-space; per-channel inverse below
+    else:
+        target_std = float(stats["std"][target_idx])
+        mse = mse_z * target_std * target_std
+        mae = mae_z * target_std
     elapsed = round(time.time() - t0, 1)
     metrics = dict(model=model_name, data=str(getattr(cfg, "data_path", "<df>")), features=cfg.features,
                    seq_len=cfg.seq_len, pred_len=cfg.pred_len, n_features=n_feat,
@@ -254,7 +267,8 @@ def run_cfg(build_fn, model_name, cfg, df=None):
                    mse_z=mse_z, mae_z=mae_z, target_std=target_std,
                    val_mse=best_val, elapsed_s=elapsed, epochs_ran=ep + 1, seed=cfg.seed)
     if not cfg.quiet:
-        print(f"{model_name}  MSE {mse:.4f} ({mse_z:.4f} z)  MAE {mae:.4f}  R2 {r2:.4f}  "
+        mse_label = f"MSE {mse:.4f}" + (f" ({mse_z:.4f} z)" if cfg.features != "M" else " (M-mode, z-space)")
+        print(f"{model_name}  {mse_label}  MAE {mae:.4f}  R2 {r2:.4f}  "
               f"DA {da:.3f}  ({elapsed}s, {ep+1} epochs)")
 
     if cfg.out_dir:

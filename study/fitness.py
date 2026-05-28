@@ -14,6 +14,7 @@ the model training multiplies with seed count.
 """
 import hashlib
 import json
+import random
 import sys
 import time
 import types
@@ -131,12 +132,32 @@ def _safe_std(xs):
     return float("nan") if a.size == 0 or np.all(np.isnan(a)) else float(np.nanstd(a))
 
 
+def _train_only_target_std(df, target, train_ratio=0.7):
+    """Population std of the target on the train slice ONLY — matches what
+    `_common.load_csv_splits` uses for its StandardScaler. Used for the degenerate
+    penalty so the penalty scale doesn't leak val/test info into fitness."""
+    if target not in df.columns:
+        return 1.0
+    n = len(df); n_train = int(n * train_ratio)
+    arr = df[target].iloc[:n_train].to_numpy(float)
+    # ddof=0 (population std) is what numpy.std does on a numpy array — matches
+    # `train_slice.std(0)` in load_csv_splits exactly.
+    s = float(np.std(arr))
+    return s if s > 0 else 1.0
+
+
 def _evaluate_steps(sc, steps):
     """Train the model on every (dataset x seed) pair; aggregate by mean.
 
     Returns (agg, per) where `agg` has mean MSE/MAE/DA/R2 (over all trainings)
     plus `mse_std` (std of MSE across seeds, averaged across datasets — i.e. how
     seed-sensitive this genome's MSE is). `per` is per-dataset with per-seed lists.
+
+    RNG isolation: `_common.run_cfg` resets the global Python+NumPy RNG via
+    `set_seed(cfg.seed)` to make torch training reproducible. DEAP and our genome
+    operators use the same global RNG for selection/crossover/mutation, so we
+    snapshot+restore the Python and NumPy state around each training to keep the
+    EA's stream independent of the training seeds.
     """
     per = {}
     t0 = time.time()
@@ -146,8 +167,8 @@ def _evaluate_steps(sc, steps):
         # e.g. an empty diagram), do NOT reward the model's free extra-channel capacity.
         ph_cols = [c for c in df.columns if c.startswith("ph_")]
         if ph_cols and float(np.nanstd(df[ph_cols].to_numpy(dtype=float))) < 1e-9:
-            # penalty in original (price) units — use the target column's std as the scale
-            tstd = float(df[sc.target].std()) if sc.target in df.columns else 1.0
+            # penalty scale = TRAIN-ONLY std of the target (P3 fix — match the scaler).
+            tstd = _train_only_target_std(df, sc.target)
             pen_orig = PENALTY_Z * tstd * tstd
             per[d.stem] = dict(mse=pen_orig, mae=PENALTY_Z * tstd,
                                da=float("nan"), r2=float("nan"), seconds=0.0,
@@ -156,7 +177,15 @@ def _evaluate_steps(sc, steps):
         seed_mse, seed_mae, seed_da, seed_r2, seed_s = [], [], [], [], []
         for seed in sc.seeds:
             cfg = _model_cfg(sc, seed)
-            m = _common.run_cfg(sc.build_fn, sc.model, cfg, df=df)
+            # P1 fix: snapshot RNG so run_cfg's internal set_seed() doesn't bleed
+            # into the EA's selection/mutation/crossover stream.
+            py_state = random.getstate()
+            np_state = np.random.get_state()
+            try:
+                m = _common.run_cfg(sc.build_fn, sc.model, cfg, df=df)
+            finally:
+                random.setstate(py_state)
+                np.random.set_state(np_state)
             # divergence check on scaled-space MSE (where PENALTY_Z=10 is meaningfully
             # bad regardless of dataset scale). Penalty value is reported back in
             # original (price) units via target_std so it stays comparable.

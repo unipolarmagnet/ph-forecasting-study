@@ -72,8 +72,28 @@ def ph_features(df, source="close", window=64, stride=5, point_cloud="takens",
 
 
 def cleanup(df, target="Close", **_):
-    """Make the frame model-ready: drop infs, fill warmup NaNs."""
-    return df.replace([np.inf, -np.inf], np.nan).ffill().bfill().fillna(0.0)
+    """Make the frame model-ready: drop infs, fill warmup NaNs.
+
+    PH columns are CAUSAL by construction (ph_features computes them from a window
+    ending at t, so the value at t doesn't see beyond t). The early `window - 1`
+    rows are NaN because the rolling window isn't full yet. We MUST NOT back-fill
+    those — a bfill would copy the first computed PH (which used rows 0..window-1)
+    backwards into rows 0..window-2, smuggling future information into those
+    training/test windows. Forward-fill is fine (only uses past PH values), and
+    remaining leading NaNs are zeroed out as a neutral placeholder.
+
+    Non-PH columns (raw OHLCV, normalized variants) are well-behaved — we keep
+    ffill+bfill there since stock CSVs are dense.
+    """
+    df = df.replace([np.inf, -np.inf], np.nan)
+    ph_cols = [c for c in df.columns if c.startswith("ph_")]
+    non_ph_cols = [c for c in df.columns if c not in ph_cols]
+    if non_ph_cols:
+        df[non_ph_cols] = df[non_ph_cols].ffill().bfill()
+    if ph_cols:
+        # ffill propagates the *previous* PH value (causal); leading NaN -> 0.
+        df[ph_cols] = df[ph_cols].ffill().fillna(0.0)
+    return df.fillna(0.0)
 
 
 NODES = {

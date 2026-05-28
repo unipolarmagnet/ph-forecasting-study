@@ -142,11 +142,18 @@ def _run_pipeline_logic(body):
 
 
 def _prune_jobs():
-    """Trim the OLDEST finished jobs so JOBS stays bounded. Caller holds JOBS_LOCK."""
+    """Trim the OLDEST finished jobs so JOBS stays bounded. Caller holds JOBS_LOCK.
+
+    A killed job is marked status="killed" by the kill endpoint BEFORE its
+    `_drive_job` thread observes proc exit and writes the final error/ended_at.
+    Pruning by `status != "running"` alone could nuke that entry mid-flight and
+    the driver would silently lose the record. We therefore require ended_at to
+    be set as well — i.e. only fully-finalized jobs are eligible for pruning.
+    """
     if len(JOBS) < MAX_JOBS:
         return
-    finished = sorted(((j.get("ended_at") or 0, k) for k, j in JOBS.items()
-                       if j["status"] != "running"))
+    finished = sorted(((j["ended_at"], k) for k, j in JOBS.items()
+                       if j["status"] != "running" and j.get("ended_at") is not None))
     for _, k in finished[:len(JOBS) - MAX_JOBS + 1]:
         JOBS.pop(k, None)
 
