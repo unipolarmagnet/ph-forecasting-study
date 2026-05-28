@@ -113,6 +113,34 @@ margin:4px 0 0;font-size:12px;white-space:pre-wrap;word-break:break-word}
       <span class="muted">trains on call — a few seconds (longer with small stride / big resolution)</span></div>
     <div id="r_model"></div>
   </div>
+
+  <!-- POST /pipeline/run -->
+  <div class="card">
+    <div class="ep"><span class="m POST">POST</span><span class="path">/pipeline/run</span></div>
+    <p class="desc">Unified pipeline: <b>data → preprocessing chain → model train+eval</b>. Returns metrics + timing breakdown.</p>
+    <div class="grid">
+      <div><label>data (ticker)</label><select id="pr_data"></select></div>
+      <div><label>model</label><select id="pr_model"></select></div>
+      <div><label>seq_len</label><input id="pr_seq" type="number" value="96"></div>
+      <div><label>pred_len</label><input id="pr_pred" type="number" value="24"></div>
+      <div><label>epochs</label><input id="pr_epochs" type="number" value="10"></div>
+      <div><label>batch_size</label><input id="pr_bs" type="number" value="32"></div>
+      <div><label>lr</label><input id="pr_lr" type="number" step="0.0001" value="0.005"></div>
+      <div><label>features</label><select id="pr_feat"><option>MS</option><option>S</option><option>M</option></select></div>
+      <div><label>target</label><input id="pr_target" value="Close"></div>
+      <div><label>seed</label><input id="pr_seed" type="number" value="2021"></div>
+      <div class="row"><input id="pr_mix" type="checkbox" checked><label style="margin:0">mix_channels</label></div>
+    </div>
+    <fieldset>
+      <legend>preprocessing pipeline (in order)</legend>
+      <div id="pr_steps"></div>
+      <div class="row"><button type="button" onclick="addStep()">+ add step</button>
+        <span class="muted">params is JSON — edit inline or leave the default for the chosen node</span></div>
+    </fieldset>
+    <div class="row"><button onclick="sendPipeline()">Send</button>
+      <span class="muted">empty preprocessing list = raw OHLCV (no PH)</span></div>
+    <div id="r_pipeline"></div>
+  </div>
 </div>
 
 <script>
@@ -166,22 +194,76 @@ function sendModel(){
   send('POST','/model/'+val('m_model'),{body},'r_model');
 }
 
-// populate dropdowns
+// ---- pipeline editor (dynamic preprocessing step rows) ----
+const DEFAULT_PARAMS = {
+  normalize:    '{"columns":["Close"]}',
+  ph_features:  '{"point_cloud":"takens","filtration":"vietoris_rips","vectorizer":"silhouette","window":96,"stride":5,"dimension":3,"delay":4,"homology_dim":1,"maxdim":1,"resolution":20}',
+  cleanup:      '{}'
+};
+let NODES = [];
+
+function addStep(){
+  const c = document.getElementById('pr_steps');
+  const row = document.createElement('div');
+  row.className = 'pr-step';
+  row.style.cssText = 'display:grid;grid-template-columns:170px 1fr auto;gap:8px;align-items:center;margin:6px 0';
+  const sel = document.createElement('select');
+  (NODES.length?NODES:['normalize','ph_features','cleanup']).forEach(n=>{
+    const o=document.createElement('option');o.value=o.textContent=n;sel.appendChild(o);
+  });
+  if (NODES.includes('ph_features')) sel.value = 'ph_features';
+  const ta = document.createElement('input');
+  ta.type='text'; ta.style.fontSize='11px';
+  ta.value = DEFAULT_PARAMS[sel.value] || '{}';
+  sel.addEventListener('change', ()=>{ ta.value = DEFAULT_PARAMS[sel.value] || '{}'; });
+  const btn = document.createElement('button');
+  btn.type='button'; btn.textContent='×';
+  btn.style.cssText='background:#3a2a30;color:#ff7a7a;padding:6px 10px;font-weight:700';
+  btn.onclick = ()=>row.remove();
+  row.appendChild(sel); row.appendChild(ta); row.appendChild(btn);
+  c.appendChild(row);
+}
+
+function sendPipeline(){
+  const steps = Array.from(document.querySelectorAll('#pr_steps .pr-step')).map(row=>{
+    const sel = row.querySelector('select'), ta = row.querySelector('input[type=text]');
+    let p={}; try{ p = ta.value.trim() ? JSON.parse(ta.value) : {}; }
+    catch(e){ alert('Invalid JSON in step "'+sel.value+'": '+e.message); throw e; }
+    return {node: sel.value, params: p};
+  });
+  const body = {
+    data: val('pr_data'), model: val('pr_model'), preprocessing: steps,
+    model_params: {
+      seq_len:num('pr_seq'), pred_len:num('pr_pred'), epochs:num('pr_epochs'),
+      batch_size:num('pr_bs'), lr:num('pr_lr'), features:val('pr_feat'),
+      target:val('pr_target'), seed:num('pr_seed'), mix_channels:val('pr_mix')
+    }
+  };
+  send('POST','/pipeline/run',{body},'r_pipeline');
+}
+
+// populate dropdowns + load nodes + seed one preprocessing step
 (async function init(){
   try{
     const ms = await (await fetch(BASE+'/models')).json();
-    const sel=document.getElementById('m_model'); sel.innerHTML='';
-    Object.keys(ms).forEach(n=>{const o=document.createElement('option');o.value=o.textContent=n;sel.appendChild(o);});
+    ['m_model','pr_model'].forEach(id=>{
+      const sel=document.getElementById(id); if(!sel)return; sel.innerHTML='';
+      Object.keys(ms).forEach(n=>{const o=document.createElement('option');o.value=o.textContent=n;sel.appendChild(o);});
+    });
   }catch(e){}
   try{
     const ds = await (await fetch(BASE+'/datasets')).json();
-    const fsel=document.getElementById('d_filename'), msel=document.getElementById('m_data');
-    fsel.innerHTML=''; msel.innerHTML='';
-    ds.forEach(d=>{
-      const o1=document.createElement('option');o1.value=o1.textContent=d.filename;fsel.appendChild(o1);
-      const o2=document.createElement('option');o2.value=d.ticker;o2.textContent=d.ticker+(d.n_rows?(' ('+d.n_rows+'r)'):'');msel.appendChild(o2);
+    const fsel=document.getElementById('d_filename'); if(fsel){fsel.innerHTML='';
+      ds.forEach(d=>{const o=document.createElement('option');o.value=o.textContent=d.filename;fsel.appendChild(o);});}
+    ['m_data','pr_data'].forEach(id=>{
+      const sel=document.getElementById(id); if(!sel)return; sel.innerHTML='';
+      ds.forEach(d=>{const o=document.createElement('option');o.value=d.ticker;
+        o.textContent=d.ticker+(d.n_rows?(' ('+d.n_rows+'r)'):'');sel.appendChild(o);});
     });
   }catch(e){}
+  try{ NODES = await (await fetch(BASE+'/nodes')).json(); }
+  catch(e){ NODES = ['normalize','ph_features','cleanup']; }
+  addStep();   // seed one step (defaults to ph_features) so the editor is usable on load
 })();
 </script>
 </body>
