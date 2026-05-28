@@ -131,6 +131,7 @@ margin:4px 0 0;font-size:12px;white-space:pre-wrap;word-break:break-word}
       <div><label>target</label><input id="pr_target" value="Close"></div>
       <div><label>seed</label><input id="pr_seed" type="number" value="2021"></div>
       <div class="row"><input id="pr_mix" type="checkbox" checked><label style="margin:0">mix_channels</label></div>
+      <div class="row"><input id="pr_async" type="checkbox"><label style="margin:0" title="returns {id,status:'running'} immediately — list/kill via the cards below">async</label></div>
     </div>
     <fieldset>
       <legend>preprocessing pipeline (in order)</legend>
@@ -141,6 +142,41 @@ margin:4px 0 0;font-size:12px;white-space:pre-wrap;word-break:break-word}
     <div class="row"><button onclick="sendPipeline()">Send</button>
       <span class="muted">empty preprocessing list = raw OHLCV (no PH)</span></div>
     <div id="r_pipeline"></div>
+  </div>
+
+  <!-- GET /pipelines -->
+  <div class="card">
+    <div class="ep"><span class="m GET">GET</span><span class="path">/pipelines</span>
+      <span class="muted" style="margin-left:auto" id="pp_count"></span></div>
+    <p class="desc">List recent pipeline jobs (running + finished, newest first). Click an id to inspect; ✕ kills a running job.</p>
+    <div class="row">
+      <button onclick="refreshPipelines()">Refresh</button>
+      <input id="pp_auto" type="checkbox"><label style="margin:0" for="pp_auto" title="poll every 2s">auto-refresh</label>
+    </div>
+    <div id="pp_table" style="margin-top:8px"></div>
+    <div id="r_pipelines"></div>
+  </div>
+
+  <!-- GET /pipeline/<id> -->
+  <div class="card">
+    <div class="ep"><span class="m GET">GET</span><span class="path">/pipeline/&lt;id&gt;</span></div>
+    <p class="desc">Full job details: submitted body + status + result/error + elapsed time.</p>
+    <div class="row">
+      <input id="pg_id" placeholder="job id (e.g. 7a3f2b91)" style="max-width:240px;font-family:ui-monospace,monospace">
+      <button onclick="getPipeline()">Send</button>
+    </div>
+    <div id="r_pget"></div>
+  </div>
+
+  <!-- POST /pipeline/<id>/kill -->
+  <div class="card">
+    <div class="ep"><span class="m POST">POST</span><span class="path">/pipeline/&lt;id&gt;/kill</span></div>
+    <p class="desc">Terminate the worker subprocess for a running job. No-op (returns current state) for finished jobs.</p>
+    <div class="row">
+      <input id="pk_id" placeholder="job id" style="max-width:240px;font-family:ui-monospace,monospace">
+      <button onclick="killPipeline()" style="background:#3a2a30;color:#ff7a7a">Kill</button>
+    </div>
+    <div id="r_pkill"></div>
   </div>
 </div>
 
@@ -241,7 +277,57 @@ function sendPipeline(){
       seed:num('pr_seed'), mix_channels:val('pr_mix')
     }
   };
+  if (val('pr_async')) body.async = true;
   send('POST','/pipeline/run',{body},'r_pipeline');
+  if (val('pr_async')) setTimeout(refreshPipelines, 300);   // show the new row right away
+}
+
+// ---- pipelines list / detail / kill ----
+async function refreshPipelines(){
+  const tbl = document.getElementById('pp_table');
+  const cnt = document.getElementById('pp_count');
+  try{
+    const rows = await (await fetch(BASE+'/pipelines')).json();
+    const nrun = rows.filter(r=>r.status==='running').length;
+    cnt.textContent = rows.length+' jobs · '+nrun+' running';
+    if (!rows.length){ tbl.innerHTML = '<div class="muted">no jobs yet — submit /pipeline/run with async checked</div>'; return; }
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+      '<tr style="color:#9aa3b2;text-align:left"><th>id</th><th>status</th><th>model</th><th>dataset</th><th>steps</th><th>elapsed</th><th></th></tr>';
+    for (const r of rows){
+      const col = r.status==='running'?'#5ad19a':r.status==='done'?'#6aa3ff':r.status==='killed'?'#ffa75a':'#ff7a7a';
+      html += '<tr style="border-top:1px solid #2a2e3a">'+
+        '<td><a href="#" onclick="document.getElementById(\'pg_id\').value=\''+r.id+'\';getPipeline();return false" style="color:#6aa3ff;font-family:ui-monospace,monospace">'+r.id+'</a></td>'+
+        '<td style="color:'+col+';font-weight:700">'+r.status+'</td>'+
+        '<td>'+(r.model||'')+'</td>'+
+        '<td>'+(r.dataset||'')+'</td>'+
+        '<td>'+(r.n_preprocessing_steps||0)+'</td>'+
+        '<td>'+(r.elapsed_s||0).toFixed(2)+' s</td>'+
+        '<td>'+(r.status==='running'
+          ? '<button onclick="document.getElementById(\'pk_id\').value=\''+r.id+'\';killPipeline()" style="background:#3a2a30;color:#ff7a7a;padding:3px 9px;font-size:11px">✕</button>'
+          : '')+'</td></tr>';
+    }
+    html += '</table>';
+    tbl.innerHTML = html;
+  }catch(e){ tbl.innerHTML = '<div class="err">'+esc(String(e))+'</div>'; }
+}
+let _autoTimer = null;
+function tickAuto(){
+  if(document.getElementById('pp_auto').checked){
+    refreshPipelines();
+    _autoTimer = setTimeout(tickAuto, 2000);
+  } else if (_autoTimer){ clearTimeout(_autoTimer); _autoTimer = null; }
+}
+
+function getPipeline(){
+  const id = val('pg_id').trim();
+  if(!id){ alert('enter a job id (copy from the list above)'); return; }
+  send('GET','/pipeline/'+id,{},'r_pget');
+}
+function killPipeline(){
+  const id = val('pk_id').trim();
+  if(!id){ alert('enter a job id'); return; }
+  send('POST','/pipeline/'+id+'/kill',{},'r_pkill');
+  setTimeout(refreshPipelines, 200);
 }
 
 // populate dropdowns + load nodes + seed one preprocessing step
@@ -266,6 +352,8 @@ function sendPipeline(){
   try{ NODES = await (await fetch(BASE+'/nodes')).json(); }
   catch(e){ NODES = ['normalize','ph_features','cleanup']; }
   addStep();   // seed one step (defaults to ph_features) so the editor is usable on load
+  document.getElementById('pp_auto').addEventListener('change', tickAuto);
+  refreshPipelines();  // populate the pipelines table on load
 })();
 </script>
 </body>
