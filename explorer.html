@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PH Forecasting API — Explorer</title>
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--ink:#e6e8ee;--mut:#9aa3b2;--acc:#5ad19a;--acc2:#6aa3ff;--bd:#2a2e3a;--warn:#ff7a7a;}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 18px 80px}
+h1{font-size:22px;margin:0 0 2px}.sub{color:var(--mut);margin:0 0 20px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px 18px;margin:14px 0}
+.ep{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.m{font-weight:700;font-size:12px;padding:2px 8px;border-radius:6px}
+.GET{background:#1d3a52;color:#7fc4ff}.POST{background:#2f4a30;color:#8fe0a0}
+.path{font-family:ui-monospace,monospace;font-size:14px;color:var(--ink)}
+.desc{color:var(--mut);font-size:12px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
+input,select{width:100%;background:#0f1117;border:1px solid var(--bd);color:var(--ink);border-radius:7px;padding:6px 8px;font:13px ui-monospace,monospace}
+input[type=checkbox]{width:auto}
+.row{display:flex;align-items:center;gap:8px;margin:10px 0}
+button{background:var(--acc2);color:#06121f;border:0;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer}
+button:hover{filter:brightness(1.08)}button:disabled{opacity:.5;cursor:wait}
+fieldset{border:1px dashed var(--bd);border-radius:9px;margin:12px 0 0;padding:10px 12px}
+legend{color:var(--acc);font-size:12px;padding:0 6px}
+.req{font-family:ui-monospace,monospace;font-size:12px;color:var(--mut);margin:10px 0 4px;word-break:break-all}
+.status{font-weight:700;font-size:12px;margin-left:8px}.ok{color:var(--acc)}.err{color:var(--warn)}
+pre{background:#0c0e14;border:1px solid var(--bd);border-radius:8px;padding:10px 12px;max-height:360px;overflow:auto;
+margin:4px 0 0;font-size:12px;white-space:pre-wrap;word-break:break-word}
+.muted{color:var(--mut);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PH Forecasting API — Explorer</h1>
+  <p class="sub">Base: <code id="base"></code> · pick parameters, Send, see the response. DLinear forecaster + persistent-homology features.</p>
+
+  <!-- GET /health -->
+  <div class="card">
+    <div class="ep"><span class="m GET">GET</span><span class="path">/health</span></div>
+    <p class="desc">Service status and available models.</p>
+    <button onclick="send('GET','/health',{},'r_health')">Send</button>
+    <div id="r_health"></div>
+  </div>
+
+  <!-- GET /models -->
+  <div class="card">
+    <div class="ep"><span class="m GET">GET</span><span class="path">/models</span></div>
+    <p class="desc">Registered models and their default parameters.</p>
+    <button onclick="send('GET','/models',{},'r_models')">Send</button>
+    <div id="r_models"></div>
+  </div>
+
+  <!-- GET /datasets -->
+  <div class="card">
+    <div class="ep"><span class="m GET">GET</span><span class="path">/datasets</span></div>
+    <p class="desc">Available CSV datasets with row counts and date range.</p>
+    <button onclick="send('GET','/datasets',{},'r_datasets')">Send</button>
+    <div id="r_datasets"></div>
+  </div>
+
+  <!-- GET /data -->
+  <div class="card">
+    <div class="ep"><span class="m GET">GET</span><span class="path">/data</span></div>
+    <p class="desc">A dataset's time series as JSON (with metadata).</p>
+    <div class="grid">
+      <div><label>filename *</label><select id="d_filename"></select></div>
+      <div><label>columns (csv)</label><input id="d_columns" placeholder="date,Close"></div>
+      <div><label>tail (last N)</label><input id="d_tail" type="number" placeholder="100"></div>
+      <div><label>start</label><input id="d_start" type="date"></div>
+      <div><label>end</label><input id="d_end" type="date"></div>
+      <div><label>orient</label><select id="d_orient"><option>records</option><option>columns</option><option>split</option></select></div>
+    </div>
+    <div class="row"><button onclick="sendData()">Send</button>
+      <span class="muted">tip: set <code>tail</code> to avoid pulling all ~2514 rows</span></div>
+    <div id="r_data"></div>
+  </div>
+
+  <!-- POST /model -->
+  <div class="card">
+    <div class="ep"><span class="m POST">POST</span><span class="path">/model/&lt;name&gt;</span></div>
+    <p class="desc">Train + evaluate the model; returns MSE / MAE / DA / R² / time.</p>
+    <div class="grid">
+      <div><label>model</label><select id="m_model"></select></div>
+      <div><label>data (ticker)</label><select id="m_data"></select></div>
+      <div><label>seq_len</label><input id="m_seq" type="number" value="96"></div>
+      <div><label>pred_len</label><input id="m_pred" type="number" value="24"></div>
+      <div><label>epochs</label><input id="m_epochs" type="number" value="20"></div>
+      <div><label>batch_size</label><input id="m_bs" type="number" value="32"></div>
+      <div><label>lr</label><input id="m_lr" type="number" step="0.0001" value="0.005"></div>
+      <div><label>features</label><select id="m_feat"><option>MS</option><option>S</option><option>M</option></select></div>
+      <div><label>target</label><input id="m_target" value="Close"></div>
+      <div><label>seed</label><input id="m_seed" type="number" value="2021"></div>
+      <div class="row"><input id="m_mix" type="checkbox" checked><label style="margin:0">mix_channels</label></div>
+    </div>
+    <fieldset>
+      <legend><input id="ph_on" type="checkbox"> add persistent-homology features</legend>
+      <div class="grid">
+        <div><label>point_cloud</label><select id="ph_pc"><option>takens</option><option>sliding_window</option><option>takens_pca</option><option>sliding_window_pca</option></select></div>
+        <div><label>filtration</label><select id="ph_filt"><option>vietoris_rips</option><option>dtm_rips</option><option>alpha</option><option>witness</option><option>cubical</option><option>upper_star</option><option>periodic_cubical</option></select></div>
+        <div><label>vectorizer</label><select id="ph_vec"><option>silhouette</option><option>landscape</option><option>betti</option><option>entropy</option><option>image</option><option>persistence_image</option><option>topological_vector</option><option>complex_polynomial</option><option>statistics</option></select></div>
+        <div><label>window</label><input id="ph_win" type="number" value="96"></div>
+        <div><label>stride</label><input id="ph_str" type="number" value="5"></div>
+        <div><label>dimension</label><input id="ph_dim" type="number" value="3"></div>
+        <div><label>delay</label><input id="ph_del" type="number" value="4"></div>
+        <div><label>homology_dim</label><input id="ph_hd" type="number" value="1"></div>
+        <div><label>maxdim</label><input id="ph_md" type="number" value="1"></div>
+        <div><label>resolution</label><input id="ph_res" type="number" value="20"></div>
+      </div>
+    </fieldset>
+    <div class="row"><button onclick="sendModel()">Send</button>
+      <span class="muted">trains on call — a few seconds (longer with small stride / big resolution)</span></div>
+    <div id="r_model"></div>
+  </div>
+</div>
+
+<script>
+const BASE = location.origin;
+document.getElementById('base').textContent = BASE;
+
+function val(id){const e=document.getElementById(id);return e.type==='checkbox'?e.checked:e.value;}
+function num(id){const v=document.getElementById(id).value;return v===''?undefined:Number(v);}
+
+async function send(method, path, opt, outId){
+  const out = document.getElementById(outId);
+  const qs = opt.query ? '?'+new URLSearchParams(opt.query).toString() : '';
+  const url = BASE + path + qs;
+  const init = {method, headers:{}};
+  if(opt.body){ init.headers['Content-Type']='application/json'; init.body=JSON.stringify(opt.body); }
+  out.innerHTML = '<div class="req">'+method+' '+path+qs+(opt.body?'\n'+JSON.stringify(opt.body):'')+'</div><pre>… sending …</pre>';
+  const t0 = performance.now();
+  try{
+    const res = await fetch(url, init);
+    const ms = (performance.now()-t0).toFixed(0);
+    let data; const txt = await res.text();
+    try{ data = JSON.parse(txt); }catch(e){ data = txt; }
+    const cls = res.ok ? 'ok' : 'err';
+    out.innerHTML = '<div class="req">'+method+' '+path+qs+(opt.body?'\n'+JSON.stringify(opt.body):'')+
+      '<span class="status '+cls+'">'+res.status+' · '+ms+' ms</span></div>'+
+      '<pre>'+esc(typeof data==='string'?data:JSON.stringify(data,null,2))+'</pre>';
+  }catch(err){
+    out.innerHTML = '<div class="req">'+method+' '+path+'</div><pre class="err">'+esc(String(err))+'\n(is the server running? is BASE correct?)</pre>';
+  }
+}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+
+function sendData(){
+  const q={filename:val('d_filename')};
+  for(const [k,id] of [['columns','d_columns'],['start','d_start'],['end','d_end'],['orient','d_orient']]){
+    const v=val(id); if(v) q[k]=v;
+  }
+  const tail=num('d_tail'); if(tail!==undefined) q.tail=tail;
+  send('GET','/data',{query:q},'r_data');
+}
+
+function sendModel(){
+  const body={data:val('m_data'), seq_len:num('m_seq'), pred_len:num('m_pred'), epochs:num('m_epochs'),
+    batch_size:num('m_bs'), lr:num('m_lr'), features:val('m_feat'), target:val('m_target'),
+    seed:num('m_seed'), mix_channels:val('m_mix')};
+  if(val('ph_on')){
+    body.ph={point_cloud:val('ph_pc'), filtration:val('ph_filt'), vectorizer:val('ph_vec'),
+      window:num('ph_win'), stride:num('ph_str'), dimension:num('ph_dim'), delay:num('ph_del'),
+      homology_dim:num('ph_hd'), maxdim:num('ph_md'), resolution:num('ph_res')};
+  }
+  send('POST','/model/'+val('m_model'),{body},'r_model');
+}
+
+// populate dropdowns
+(async function init(){
+  try{
+    const ms = await (await fetch(BASE+'/models')).json();
+    const sel=document.getElementById('m_model'); sel.innerHTML='';
+    Object.keys(ms).forEach(n=>{const o=document.createElement('option');o.value=o.textContent=n;sel.appendChild(o);});
+  }catch(e){}
+  try{
+    const ds = await (await fetch(BASE+'/datasets')).json();
+    const fsel=document.getElementById('d_filename'), msel=document.getElementById('m_data');
+    fsel.innerHTML=''; msel.innerHTML='';
+    ds.forEach(d=>{
+      const o1=document.createElement('option');o1.value=o1.textContent=d.filename;fsel.appendChild(o1);
+      const o2=document.createElement('option');o2.value=d.ticker;o2.textContent=d.ticker+(d.n_rows?(' ('+d.n_rows+'r)'):'');msel.appendChild(o2);
+    });
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

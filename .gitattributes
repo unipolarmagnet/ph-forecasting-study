@@ -1,0 +1,4 @@
+# Keep everything LF in the repo + working tree so .sh works on Linux servers.
+* text=auto eol=lf
+*.png binary
+*.csv text eol=lf

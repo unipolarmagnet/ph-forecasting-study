@@ -1,0 +1,547 @@
+{
+  "saved_at": "2026-05-28T04:19:03Z",
+  "source_run": "study\\runs\\ph_study",
+  "model": "dlinear",
+  "datasets": [
+    "SPY",
+    "AAPL",
+    "JPM"
+  ],
+  "study_config": {
+    "pop_size": 24,
+    "ngen": 50,
+    "epochs": 10,
+    "seq_len": 64,
+    "pred_len": 5,
+    "seed": 2021
+  },
+  "no_ph_benchmark": {
+    "mse_mean": 0.03484274583558242,
+    "mse_std": 0.00254883110455008,
+    "mae_mean": 0.13069271395603815,
+    "da_mean": 0.5005522088353414,
+    "r2_mean": 0.9576753415846119
+  },
+  "best_individuals": [
+    {
+      "rank": 0,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 118,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 13,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 118,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 13,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.03125673780838648,
+        "mae": 0.11979362865289052,
+        "da": 0.48694779116465864,
+        "r2": 0.9626593680258299,
+        "seconds": 10.43
+      },
+      "fitness": 0.03125673780838648
+    },
+    {
+      "rank": 1,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 118,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 15,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 118,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 15,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.03125673780838648,
+        "mae": 0.11979362865289052,
+        "da": 0.48694779116465864,
+        "r2": 0.9626593680258299,
+        "seconds": 9.67
+      },
+      "fitness": 0.03125673780838648
+    },
+    {
+      "rank": 2,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 118,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 17,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 118,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 17,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.03125673780838648,
+        "mae": 0.11979362865289052,
+        "da": 0.48694779116465864,
+        "r2": 0.9626593680258299,
+        "seconds": 9.47
+      },
+      "fitness": 0.03125673780838648
+    },
+    {
+      "rank": 3,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 116,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 15,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 116,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 15,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.03165875654667616,
+        "mae": 0.12232769032319386,
+        "da": 0.47858099062918336,
+        "r2": 0.9626053016951781,
+        "seconds": 9.35
+      },
+      "fitness": 0.03165875654667616
+    },
+    {
+      "rank": 4,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 116,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 17,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 116,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 17,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.03165875654667616,
+        "mae": 0.12232769032319386,
+        "da": 0.47858099062918336,
+        "r2": 0.9626053016951781,
+        "seconds": 9.83
+      },
+      "fitness": 0.03165875654667616
+    },
+    {
+      "rank": 5,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 116,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 13,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 116,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 13,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.03165875654667616,
+        "mae": 0.12232769032319386,
+        "da": 0.47858099062918336,
+        "r2": 0.9626053016951781,
+        "seconds": 8.44
+      },
+      "fitness": 0.03165875654667616
+    },
+    {
+      "rank": 6,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 116,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 20,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 116,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 20,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.03165875654667616,
+        "mae": 0.12232769032319386,
+        "da": 0.47858099062918336,
+        "r2": 0.9626053016951781,
+        "seconds": 9.12
+      },
+      "fitness": 0.03165875654667616
+    },
+    {
+      "rank": 7,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 118,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 8,
+        "width": 15,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 118,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 8,
+            "width": 15,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.031730642852683864,
+        "mae": 0.12054371585448583,
+        "da": 0.48510709504685406,
+        "r2": 0.9625735222233773,
+        "seconds": 10.27
+      },
+      "fitness": 0.031730642852683864
+    },
+    {
+      "rank": 8,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 114,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 20,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 114,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 20,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.031831344279150166,
+        "mae": 0.12310697138309479,
+        "da": 0.482429718875502,
+        "r2": 0.9625533699160754,
+        "seconds": 9.71
+      },
+      "fitness": 0.031831344279150166
+    },
+    {
+      "rank": 9,
+      "genome": {
+        "point_cloud": "takens_pca",
+        "ph_source": "close",
+        "window": 114,
+        "stride": 5,
+        "dimension": 3,
+        "delay": 9,
+        "width": 15,
+        "pca_dim": 2,
+        "filtration": "vietoris_rips",
+        "metric": "cosine",
+        "dtm_k": 4,
+        "maxdim": 1,
+        "vectorizer": "complex_polynomial",
+        "homology_dim": 1,
+        "resolution": 14
+      },
+      "steps": [
+        [
+          "ph_features",
+          {
+            "source": "close",
+            "window": 114,
+            "stride": 5,
+            "point_cloud": "takens_pca",
+            "filtration": "vietoris_rips",
+            "vectorizer": "complex_polynomial",
+            "homology_dim": 1,
+            "maxdim": 1,
+            "dimension": 3,
+            "delay": 9,
+            "width": 15,
+            "pca_dim": 2,
+            "metric": "cosine",
+            "dtm_k": 4,
+            "resolution": 14,
+            "pixels": 14,
+            "n_coeffs": 14
+          }
+        ]
+      ],
+      "metrics": {
+        "mse": 0.031831344279150166,
+        "mae": 0.12310697138309479,
+        "da": 0.482429718875502,
+        "r2": 0.9625533699160754,
+        "seconds": 9.06
+      },
+      "fitness": 0.031831344279150166
+    }
+  ]
+}
