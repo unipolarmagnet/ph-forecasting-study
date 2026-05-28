@@ -129,7 +129,11 @@ def _evaluate_steps(sc, steps):
             m = dict(mse=PENALTY, mae=PENALTY, r2=float("nan"), da=float("nan"), elapsed_s=m.get("elapsed_s", 0))
         per[d.stem] = dict(mse=float(m["mse"]), mae=float(m["mae"]),
                            da=float(m["da"]), r2=float(m["r2"]), seconds=float(m["elapsed_s"]))
-    agg = {k: float(np.nanmean([per[ds][k] for ds in per])) for k in METRICS}
+
+    def _mean(xs):                                          # no RuntimeWarning on all-NaN
+        a = np.asarray(xs, dtype=float)
+        return float("nan") if a.size == 0 or np.all(np.isnan(a)) else float(np.nanmean(a))
+    agg = {k: _mean([per[ds][k] for ds in per]) for k in METRICS}
     agg["seconds"] = round(time.time() - t0, 2)
     return agg, per
 
