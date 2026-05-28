@@ -448,5 +448,7 @@ if __name__ == "__main__":
     p.add_argument("--port", type=int, default=8000)
     a = p.parse_args()
     print(f"Serving models {list(MODELS)} on http://{a.host}:{a.port}")
-    # threaded=False: one training at a time (torch training shouldn't overlap on one GPU)
-    app.run(host=a.host, port=a.port, threaded=False)
+    # threaded=True so management endpoints (/pipelines, /pipeline/<id>, /kill, /health)
+    # stay responsive while a long /pipeline/run is in flight. Async jobs run in
+    # subprocesses anyway, and CUDA serializes work internally, so this is safe.
+    app.run(host=a.host, port=a.port, threaded=True)
